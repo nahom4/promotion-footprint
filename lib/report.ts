@@ -1,5 +1,5 @@
 import { ChannelResult, FootprintReport, Observation, Platform } from "./types";
-import { observers } from "./observers";
+import { WebsiteObserver, observers } from "./observers";
 
 const platforms: Platform[] = ["Google", "Meta", "LinkedIn", "YouTube", "TikTok", "Website"];
 
@@ -14,9 +14,8 @@ function scoreChannel(items: Observation[]): ChannelResult {
 export async function analyze(company: string): Promise<FootprintReport> {
   const results = await Promise.allSettled(observers.map(o => o.observe(company)));
   const all: Observation[] = results.flatMap(r => r.status === "fulfilled" ? r.value : []);
-  const websiteDomain = company.match(/^(?:https?:\/\/)?([^/]+\.[^/]+)$/i)?.[1];
-  if (websiteDomain) {
-    try { all.push(...await (await import("./observers")).WebsiteObserver.prototype.observe.call({ platform: "Website" }, websiteDomain)); } catch {}
+  if (/^https?:\/\//i.test(company)) {
+    try { all.push(...await new WebsiteObserver().observe(company)); } catch {}
   }
   const channels = platforms.map(platform => scoreChannel(all.filter(x => x.platform === platform))).sort((a,b) => b.score - a.score);
   const keywordGroups: Record<string,string[]> = {
@@ -33,5 +32,5 @@ export async function analyze(company: string): Promise<FootprintReport> {
     "Some platforms restrict automated access. Those observers record evidence only when the public page can be fetched.",
     "The current MVP measures observable promotional footprint, not advertising spend or conversion impact."
   ];
-  return { company, domain: websiteDomain, generatedAt: new Date().toISOString(), score, channels, themes, limitations };
+  return { company, domain: /^https?:\/\//i.test(company) ? company : undefined, generatedAt: new Date().toISOString(), score, channels, themes, limitations };
 }
