@@ -1,5 +1,6 @@
 import { ChannelResult, FootprintReport, Observation, Platform } from "./types";
 import { WebsiteObserver, observers } from "./observers";
+import { observeMetaAds, observeYouTube } from "./api-observers";
 
 const platforms: Platform[] = ["Google", "Meta", "LinkedIn", "YouTube", "TikTok", "Website"];
 
@@ -12,7 +13,11 @@ function scoreChannel(items: Observation[]): ChannelResult {
 }
 
 export async function analyze(company: string): Promise<FootprintReport> {
-  const results = await Promise.allSettled(observers.map(o => o.observe(company)));
+  const results = await Promise.allSettled([
+    ...observers.map(o => o.observe(company)),
+    observeMetaAds(company),
+    observeYouTube(company)
+  ]);
   const all: Observation[] = results.flatMap(r => r.status === "fulfilled" ? r.value : []);
   if (/^https?:\/\//i.test(company)) {
     try { all.push(...await new WebsiteObserver().observe(company)); } catch {}
@@ -30,6 +35,7 @@ export async function analyze(company: string): Promise<FootprintReport> {
   const limitations = [
     "Public transparency surfaces are incomplete; absence of an observation does not prove a channel is unused.",
     "Some platforms restrict automated access. Those observers record evidence only when the public page can be fetched.",
+    "Meta Ads Archive and YouTube Data API observers activate only when their environment variables are configured.",
     "The current MVP measures observable promotional footprint, not advertising spend or conversion impact."
   ];
   return { company, domain: /^https?:\/\//i.test(company) ? company : undefined, generatedAt: new Date().toISOString(), score, channels, themes, limitations };
